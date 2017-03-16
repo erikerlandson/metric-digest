@@ -41,11 +41,13 @@ app = Flask(__name__)
 
 @app.route("/")
 def flask_root():
-    return jsonify({"message": "the root of all evil"})
+    return render_template('index.html',
+                           categories=["foo", "goo", "moo"],
+                           data=[30, 10, 5])
 
 @app.route("/data")
 def flask_data():
-    return jsonify({"message": latest})
+    return jsonify({"categories": ["foo", "goo", "moo"], "data": [ [ "counts", 60, 20, 10 ] ] })
 
 threads = [
     Producer(),
