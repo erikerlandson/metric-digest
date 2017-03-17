@@ -15,13 +15,15 @@ import org.isarnproject.sketches.TDigest
 
 object td2json {
   def apply(td: TDigest, bins: Int = 10): String = {
-    require(bins > 1)
+    require(bins >= 2)
     val (xmin, xmax) = (td.cdfInverse(0.0), td.cdfInverse(1.0))
     val xrange = xmax - xmin
     require(xrange > 0.0)
     val cdfx = for { k <- 0 to bins } yield (k.toDouble / bins.toDouble)
     val x = cdfx.map(td.cdfInverse[Double])
-    val json = ("x" -> x) ~ ("bins" -> bins) ~ ("binsize" -> 1.0 / bins.toDouble)
+    val p = 1.0 / bins.toDouble
+    val d = (0 until bins).map { k => p / (x(k + 1) - x(k)) }
+    val json = ("x" -> x) ~ ("d" -> d)
     pretty(render(json))
   }
 }
@@ -41,7 +43,6 @@ object MetricDigestProducer extends App {
   props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
 
   val producer = new KafkaProducer[String, String](props)
-  println(s"producer= $producer")
 
   var metricDigest = TDigest.empty(delta = 0.05)
 
@@ -49,20 +50,22 @@ object MetricDigestProducer extends App {
   var tAcc = 0L
   var tTot = 0L
   while (tTot <= (minutes * 60 * 1000).toLong) {
+    Thread.sleep(1)
+
+    metricDigest += Random.nextGaussian()
+
     val tCur = System.currentTimeMillis()
     val t = tCur - tLast
     tLast = tCur
     tAcc += t
     tTot += t
 
-    metricDigest += Random.nextGaussian()
-
     if (tAcc >= pubInterval) {
       tAcc -= pubInterval
       val status = for {
-        jsonCDF <- Try { td2json(metricDigest) }
+        json <- Try { td2json(metricDigest, bins = 15) }
         r <- Try {
-          val rec = new ProducerRecord[String, String]("test", jsonCDF)
+          val rec = new ProducerRecord[String, String]("test-digest", json)
           producer.send(rec)
         }
       } yield (r)
@@ -71,7 +74,7 @@ object MetricDigestProducer extends App {
           println(s"Sent CDF at time ${tTot/1000L} seconds")
         }
         case Failure(e) => {
-          println(s"Send FAILED: $e")
+          println(s"Send FAILED at time ${tTot/1000L} seconds: err= $e")
         }
       }
     }

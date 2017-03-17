@@ -2,26 +2,18 @@
 
 import threading, logging, time
 
+import json
+
 from kafka import KafkaConsumer, KafkaProducer
 
 from flask import Flask, request, jsonify, render_template
 
+# todo: command-line and/or env
 broker = 'apache-kafka:9092'
-topic = 'my-topic'
+topic = 'test-digest'
 
-latest = None
-
-class Producer(threading.Thread):
-    daemon = True
-
-    def run(self):
-        producer = KafkaProducer(bootstrap_servers=broker)
-        n = 1
-        while True:
-            v = b"ponies!! %d" % (n)
-            producer.send(topic, v)
-            n = n + 1
-            time.sleep(2)
+# todo: should probably be hardened with mutex
+latest = { "x": [0.0, 1.0], "d": [1.0] }
 
 class Consumer(threading.Thread):
     daemon = True
@@ -34,29 +26,21 @@ class Consumer(threading.Thread):
         consumer.subscribe([topic])
 
         for message in consumer:
-            latest = message.value
-
+            latest = json.loads(message.value)
 
 app = Flask(__name__)
 
 @app.route("/")
 def flask_root():
-    return render_template('index.html',
-                           categories=["foo", "goo", "moo"],
-                           data=[30, 10, 5])
+    return render_template('index.html', xdata = latest["x"], ddata = latest["d"])
 
 @app.route("/data")
 def flask_data():
-    return jsonify({"categories": ["foo", "goo", "moo"], "data": [ [ "counts", 60, 20, 10 ] ] })
+    return jsonify({"xdata": latest["x"], "ddata": latest["d"] })
 
-threads = [
-    Producer(),
-    Consumer()
-]
+threads = [ Consumer() ]
 
 for t in threads:
     t.start()
 
 app.run(host='0.0.0.0', port=8080)
-
-time.sleep(300)

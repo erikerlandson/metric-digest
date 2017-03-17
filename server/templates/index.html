@@ -10,50 +10,64 @@
 <script src="http://www.patternfly.org/components/d3/d3.min.js"></script>
 <div id="chart"></div>
 <script>
-  var categories = [ '{{ categories|join('\',\'')|safe }}' ];
-  var columnsData = [ ['counts', {{ data|join(',') }} ] ];
 
-  var horizontalBarChartConfig = $().c3ChartDefaults().getDefaultBarConfig(categories);
-  horizontalBarChartConfig.bindto = '#chart';
-  horizontalBarChartConfig.axis = {
-    rotated: true,
-    x: {
-      categories: categories,
-      type: 'category'
+  xhack = function(xdata) {
+    var xh = ['xd'];
+    var n = xdata.length;
+    xh.push(xdata[0]);
+    for (var j = 1; j < n-1; ++j) {
+      xh.push(xdata[j] - 0.01);
+      xh.push(xdata[j] + 0.01);
     }
+    xh.push(xdata[n-1]);
+    return xh;
   };
-  horizontalBarChartConfig.data = {
-    type: 'bar',
-    columns: columnsData,
+
+  yhack = function(ydata) {
+    var yh = ['yd'];
+    var n = ydata.length;
+    for (var j = 0; j < n; ++j) {
+      yh.push(ydata[j]);
+      yh.push(ydata[j]);
+    }
+    return yh;
   };
-  var horizontalBarChart = c3.generate(horizontalBarChartConfig);
+
+  chartdata = function(xdata, ydata) {
+    var xh = xhack(xdata);
+    var yh = yhack(ydata);
+    c3.generate({
+      bindto: '#chart',
+      data: {
+        x: 'xd',
+        columns: [ xh, yh ],
+        types: {
+            yd: 'area-step'
+        }
+      },
+      axis: {
+        x: {
+          tick: {
+            count: 5
+          }
+        }
+      }      
+    });
+  };
 
   loadData = function() {
     $.ajax({
         url: "data",
         dataType: "json",
-    }).success(function(jsonData){
-      var horizontalBarChartConfig = $().c3ChartDefaults().getDefaultBarConfig(jsonData['categories']);
-      horizontalBarChartConfig.bindto = '#chart';
-      horizontalBarChartConfig.axis = {
-        rotated: true,
-        x: {
-          categories: jsonData['categories'],
-          type: 'category'
-        }
-      };
-      horizontalBarChartConfig.data = {
-        type: 'bar',
-        columns: jsonData['data'],
-      };
-      horizontalBarChart = c3.generate(horizontalBarChartConfig);
-      setTimeout(function(){loadData();}, 10000);
+  }).success(function(jsonData) {
+      chartdata(jsonData['xdata'], jsonData['ddata']);
+      setTimeout(function() { loadData(); }, 5000);
     });
   };
 
-  setTimeout(function(){
-     var data = loadData();
-  }, 10000);
+  chartdata([{{ xdata }}], [{{ ddata }}]);
+
+  setTimeout(function() { loadData(); }, 5000);
 
 </script>
 </body>
